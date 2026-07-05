@@ -1,0 +1,10 @@
+{
+    "name": "peanut/formflow-core",
+    "description": "Shared form-engine + API/connector core for FormFlow Pro and Lite (extracted from the duplicated isf/fffl code).",
+    "type": "library",
+    "license": "proprietary",
+    "require": { "php": ">=8.0" },
+    "require-dev": { "phpunit/phpunit": "^9.6" },
+    "autoload": { "classmap": ["src/"] },
+    "autoload-dev": { "psr-4": { "Peanut\\FormCore\\Tests\\": "tests/" } }
+}
