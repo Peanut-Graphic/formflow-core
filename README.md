@@ -44,10 +44,19 @@ The shared version guards the `-0` trap explicitly, clamps negative windows to z
 toward *less* disclosure (a value too short to mask meaningfully is masked entirely rather than
 partly revealed). Pinned by tests, including the leak case.
 
-> **Not yet extracted:** `encrypt()` / `decrypt()` / key derivation. Those touch **data at rest** —
-> a behaviour change there makes stored records permanently unreadable — and FormFlow Pro currently
-> has **no encryption tests at all** (Lite has 12). Characterize Pro first; only then move the
-> crypto path.
+### Fourth slice — `Encryptor` (data at rest)
+AES-256-CBC encrypt/decrypt + key derivation, extracted from the byte-identical copies in Pro and
+Lite.
+
+The constraint that shapes it: **existing ciphertext must keep decrypting.** Stored records were
+written by the previous implementation, so the key derivation and wire format are reproduced
+exactly — same cipher, same 16-byte IV prepended, same base64 envelope, same `substr(...,0,32)`
+truncation (a configured key is TRUNCATED, only the salt fallback is HASHED; swapping which branch
+hashes would invalidate every stored record).
+
+Because "it round-trips itself" would not have caught that, the suite reproduces the **legacy
+algorithm verbatim** and proves the two interchangeable in BOTH directions, across unicode,
+multiline, exact-AES-block and 5KB payloads — so a partial rollout can't corrupt reads either.
 
 > ⚠️ **Release requirement:** a consumer that registers `SignedUpdateGate` will refuse **every**
 > subsequent update that lacks a valid `.manifest.json`. Its releases must therefore be published via
