@@ -32,6 +32,23 @@ as **ours**, an untrusted host or missing manifest is **refused**, not skipped. 
 updater of their own (FormFlow Lite — packages are handed to it by the license-server mu-plugin) have
 no other control in the path.
 
+### Third slice — sensitive-value primitives (`Peanut\FormCore\Crypto`)
+`SensitiveValue::mask()` / `hash()` / `verifyHash()`, extracted from the copies in Pro and Lite.
+
+Those copies had **diverged**: both repos independently found the same `substr($data, -0)` bug —
+PHP treats `-0` as `0`, so a "reveal no trailing characters" mask returned the **entire value** —
+and each shipped a *different* fix. One bug, found twice, fixed twice, with no guarantee the next
+fix reaches both. That is the concrete cost of A6.
+
+The shared version guards the `-0` trap explicitly, clamps negative windows to zero, and fails
+toward *less* disclosure (a value too short to mask meaningfully is masked entirely rather than
+partly revealed). Pinned by tests, including the leak case.
+
+> **Not yet extracted:** `encrypt()` / `decrypt()` / key derivation. Those touch **data at rest** —
+> a behaviour change there makes stored records permanently unreadable — and FormFlow Pro currently
+> has **no encryption tests at all** (Lite has 12). Characterize Pro first; only then move the
+> crypto path.
+
 > ⚠️ **Release requirement:** a consumer that registers `SignedUpdateGate` will refuse **every**
 > subsequent update that lacks a valid `.manifest.json`. Its releases must therefore be published via
 > `Peanut-meta/scripts/publish-plugin.sh`, which signs unconditionally. As of 2026-07-19 no
