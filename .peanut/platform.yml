@@ -1,0 +1,89 @@
+schema_version: 1
+project:
+  id: formflow-core
+  name: FORMFLOW-CORE
+  classification: library
+  repository: https://github.com/Peanut-Graphic/formflow-core.git
+  lifecycle: active
+ownership:
+  platform: Peanut Graphic
+  deployment: Peanut Graphic
+  rollback: Peanut Graphic
+environments:
+  - name: composer-vcs-distribution
+    kind: production
+    provider: Public GitHub repository resolved as a Composer VCS package
+    url: https://github.com/Peanut-Graphic/formflow-core
+runtimes:
+  - name: php
+    baseline: ">=8.0 with OpenSSL and sodium for the complete crypto/update contract"
+    declarations:
+      - { scope: dependency, source: composer.json, value: "PHP >=8.0; PHPUnit ^9.6 for development; OpenSSL and sodium extensions are used by source but are not declared" }
+      - { scope: development, source: README.md, value: "WordPress-stubbed package tests; source is bundled into consumer plugin vendor directories" }
+      - { scope: release, source: Git tags v0.2.0 through v0.5.0, value: "Composer VCS versions; current main and v0.5.0 resolve to f168a8c05e829d36994a731bdf144689da73cf4e" }
+    production_observation: { status: not-applicable }
+databases: []
+services:
+  - kind: other
+    baseline: Shared FormFlow and Peanut Connect security and form-engine library
+    declarations:
+      - { scope: dependency, source: src/Update, value: "Fail-closed SHA-256 plus Ed25519 package verification and trusted HTTPS host enforcement" }
+      - { scope: dependency, source: src/Crypto, value: "Sensitive-value masking/hashing, encryption-key notices, and legacy-compatible AES-256-CBC data-at-rest encryption" }
+      - { scope: dependency, source: src/Api and src/class-hooks.php, value: "Shared connector/result contracts, registry, and hook catalog; adoption is partial across consumers" }
+      - { scope: release, source: FORMFLOW and FORMFLOW-LITE composer.lock, value: "Both consumers resolve v0.5.0 at f168a8c05e829d36994a731bdf144689da73cf4e" }
+      - { scope: release, source: PEANUT-CONNECT composer.lock, value: "Consumer resolves update-verification slice v0.2.0 at 1da54b9e5573ecc4156fab3d0b0df856840853fa" }
+    production_observation: { status: unverified }
+distribution:
+  mode: package-registry
+  source_of_truth: Git tags in Peanut-Graphic/formflow-core consumed through Composer VCS and bundled by the central plugin publisher
+  versioned_artifact: "yes"
+  signed: "no"
+  canary: unknown
+  rollback: unknown
+exceptions:
+  - id: PAR-005
+    concern: Security-critical VCS distribution lacks authenticated provenance, a consumer canary, and rollback evidence
+    reason: Versions are Git tags without GitHub Releases, signed artifacts, repository workflow, immutable-tag enforcement, or a fresh-consumer canary. Main is unprotected, and repository evidence does not identify a rehearsed package rollback or deprecation response.
+    risk: A tag or branch-control failure can change the shared updater or encryption dependency inherited by bundled WordPress releases without independently verifiable provenance or recovery evidence.
+    owner: Peanut Graphic
+    verification: Protect main and version tags, test and attest the exact tagged Composer artifact, install it through representative Pro, Lite, and Connect canaries, record the bundled consumer artifact digests, and rehearse rollback or safe deprecation before the next release.
+    review_date: "2026-11-14"
+    status: proposed
+  - id: PAR-210
+    concern: Runtime and consumer declarations do not describe one enforced compatibility contract
+    reason: composer.json accepts every PHP >=8.0 runtime but has no CI matrix and omits ext-openssl and ext-sodium even though encryption calls OpenSSL directly and signed updates require sodium. README says consumers are lockstep-versioned, while Pro and Lite lock v0.5.0 and Connect intentionally remains on v0.2.0; shared form/hook components are still duplicated and only the security slices are broadly adopted.
+    risk: Composer can admit a host missing required crypto capabilities or an untested PHP version, and maintainers can assume later shared behavior reaches consumers that pin an earlier or locally duplicated implementation.
+    owner: Peanut Graphic
+    verification: Declare required or explicitly optional extensions, test the full PHP 8.0-through-approved-fleet matrix, document per-consumer slice/version ownership, and add integration assertions that each bundled plugin uses the intended shared classes and exact lock revision.
+    review_date: "2026-11-14"
+    status: proposed
+  - id: PAR-503
+    concern: The shared security library has no required repository quality gate
+    reason: The repository has no GitHub Actions workflow and main is unprotected. The 63-test suite and dependency audit pass only when run manually from an unlocked PHPUnit dependency graph, so direct changes and tags are not gated on syntax, compatibility, cryptographic regressions, or consumer integration.
+    risk: A regression in fail-closed update verification, host matching, masking, key derivation, or legacy ciphertext compatibility can be tagged and consumed without any required automated proof.
+    owner: Peanut Graphic
+    verification: Commit a deterministic development lock or equivalent toolchain pin, require PHP compatibility, syntax, unit, crypto-property, dependency-audit, and representative consumer-integration checks on protected main and release tags, and fail closed when any consumer proof is absent.
+    review_date: "2026-08-21"
+    status: proposed
+verification:
+  status: source-audited
+  audited_commit: f168a8c05e829d36994a731bdf144689da73cf4e
+  last_reviewed: "2026-08-14"
+  sources:
+    - README.md
+    - composer.json
+    - src/Api
+    - src/Crypto
+    - src/Update
+    - src/class-hooks.php
+    - tests
+    - FORMFLOW composer.json and composer.lock
+    - FORMFLOW-LITE composer.json and composer.lock
+    - PEANUT-CONNECT composer.json and composer.lock
+    - Peanut Meta publish-plugin.sh and shared-core audit documentation
+    - GitHub repository, branch-protection, tag, release, and workflow metadata
+  outstanding:
+    - Add authenticated immutable tag provenance, representative consumer canaries, bundled artifact identity, and rollback evidence under PAR-005.
+    - Declare crypto extensions and reconcile PHP, version, lockstep, and partial-adoption claims under PAR-210.
+    - Add required deterministic library and consumer-integration quality gates under PAR-503.
+    - Preserve legacy ciphertext compatibility and fail-closed update verification throughout any remediation.
