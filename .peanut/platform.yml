@@ -16,9 +16,11 @@ environments:
     url: https://github.com/Peanut-Graphic/formflow-core
 runtimes:
   - name: php
-    baseline: ">=8.0 with OpenSSL and sodium for the complete crypto/update contract"
+    baseline: "PHP 8.0 through 8.5 with required OpenSSL and sodium extensions"
     declarations:
-      - { scope: dependency, source: composer.json, value: "PHP >=8.0; PHPUnit ^9.6 for development; OpenSSL and sodium extensions are used by source but are not declared" }
+      - { scope: dependency, source: composer.json, value: "PHP >=8.0 <8.6; required ext-openssl and ext-sodium; resolver floor PHP 8.0.0; PHPUnit ^9.6" }
+      - { scope: dependency, source: composer.lock, value: "composer.lock resolves the PHP 8.0.0 development floor" }
+      - { scope: test, source: .github/workflows/compatibility.yml, value: "Required CI exercises PHP 8.0, 8.1, 8.2, 8.3, 8.4, and 8.5 with the crypto extensions" }
       - { scope: development, source: README.md, value: "WordPress-stubbed package tests; source is bundled into consumer plugin vendor directories" }
       - { scope: release, source: Git tags v0.2.0 through v0.5.0, value: "Composer VCS versions; current main and v0.5.0 resolve to f168a8c05e829d36994a731bdf144689da73cf4e" }
     production_observation: { status: not-applicable }
@@ -51,10 +53,10 @@ exceptions:
     status: proposed
   - id: PAR-210
     concern: Runtime and consumer declarations do not describe one enforced compatibility contract
-    reason: composer.json accepts every PHP >=8.0 runtime but has no CI matrix and omits ext-openssl and ext-sodium even though encryption calls OpenSSL directly and signed updates require sodium. README says consumers are lockstep-versioned, while Pro and Lite lock v0.5.0 and Connect intentionally remains on v0.2.0; shared form/hook components are still duplicated and only the security slices are broadly adopted.
+    reason: The source candidate now constrains PHP to the tested 8.0-through-8.5 range, declares OpenSSL and sodium, locks development resolution at the 8.0.0 floor, and runs the full matrix. README distinguishes Pro/Lite v0.5.0 adoption from Connect's intentional v0.2.0 signed-update slice. Representative consumer integration and duplicated form/hook adoption remain unproved.
     risk: Composer can admit a host missing required crypto capabilities or an untested PHP version, and maintainers can assume later shared behavior reaches consumers that pin an earlier or locally duplicated implementation.
     owner: Peanut Graphic
-    verification: Declare required or explicitly optional extensions, test the full PHP 8.0-through-approved-fleet matrix, document per-consumer slice/version ownership, and add integration assertions that each bundled plugin uses the intended shared classes and exact lock revision.
+    verification: Merge and exact-main verify the runtime matrix, then add integration assertions that each bundled plugin uses the intended shared classes and exact lock revision.
     review_date: "2026-11-14"
     status: proposed
   - id: PAR-503
@@ -67,8 +69,8 @@ exceptions:
     status: proposed
 verification:
   status: source-audited
-  audited_commit: f168a8c05e829d36994a731bdf144689da73cf4e
-  last_reviewed: "2026-08-14"
+  audited_commit: 477f77889737dd0a06265408af900f935cbe678e
+  last_reviewed: "2026-08-15"
   sources:
     - README.md
     - composer.json
@@ -84,6 +86,6 @@ verification:
     - GitHub repository, branch-protection, tag, release, and workflow metadata
   outstanding:
     - Add authenticated immutable tag provenance, representative consumer canaries, bundled artifact identity, and rollback evidence under PAR-005.
-    - Declare crypto extensions and reconcile PHP, version, lockstep, and partial-adoption claims under PAR-210.
+    - Merge and exact-main verify the runtime/extension/lock matrix, then prove exact consumer slice adoption under PAR-210.
     - Add required deterministic library and consumer-integration quality gates under PAR-503.
     - Preserve legacy ciphertext compatibility and fail-closed update verification throughout any remediation.

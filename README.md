@@ -66,9 +66,12 @@ multiline, exact-AES-block and 5KB payloads — so a partial rollout can't corru
 
 ## Consuming (per the extraction plan)
 `composer require peanut/formflow-core` via a private `vcs` repository entry; bundled into each
-plugin's `vendor/` at build time (`scripts/publish-plugin.sh`). Lockstep-versioned with the consumers.
+plugin's `vendor/` at build time (`scripts/publish-plugin.sh`). FormFlow Pro and Lite currently pin
+the complete v0.5.0 surface. Peanut Connect intentionally remains on the v0.2.0 signed-update slice;
+later form and crypto slices are not assumed adopted until its lock advances under a separate consumer change.
 
 ## Test
 `composer install && vendor/bin/phpunit` — the tests pin behaviour both plugins relied on (WP is stubbed).
+Required CI runs the locked suite on PHP 8.0 through 8.5 with OpenSSL and sodium present.
 
 See `Peanut-meta/2026-07-05-formflow-shared-core-scoping.md` for the full plan + remaining modules.
