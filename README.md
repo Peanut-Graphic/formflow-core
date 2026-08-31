@@ -73,5 +73,8 @@ later form and crypto slices are not assumed adopted until its lock advances und
 ## Test
 `composer install && vendor/bin/phpunit` — the tests pin behaviour both plugins relied on (WP is stubbed).
 Required CI runs the locked suite on PHP 8.0 through 8.5 with OpenSSL and sodium present.
+The same fail-closed matrix runs for pull requests, main pushes, and every future `v*` tag; a
+source-owned regression contract rejects missing tag coverage, mutable action selectors, an unlocked
+dependency audit, or removal of the critical update/encryption suites.
 
 See `Peanut-meta/2026-07-05-formflow-shared-core-scoping.md` for the full plan + remaining modules.
