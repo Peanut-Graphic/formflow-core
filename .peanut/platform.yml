@@ -21,6 +21,7 @@ runtimes:
       - { scope: dependency, source: composer.json, value: "PHP >=8.0 <8.6; required ext-openssl and ext-sodium; resolver floor PHP 8.0.0; PHPUnit ^9.6" }
       - { scope: dependency, source: composer.lock, value: "composer.lock resolves the PHP 8.0.0 development floor" }
       - { scope: test, source: .github/workflows/compatibility.yml, value: "Required CI exercises PHP 8.0, 8.1, 8.2, 8.3, 8.4, and 8.5 with the crypto extensions" }
+      - { scope: test, source: scripts/verify-quality-gate.php and tests/quality-gate-contract.php, value: "Pull requests, main, and future v* tags retain immutable actions, the exact PHP matrix, locked install/audit, full syntax/unit coverage, and named crypto/update suites" }
       - { scope: development, source: README.md, value: "WordPress-stubbed package tests; source is bundled into consumer plugin vendor directories" }
       - { scope: release, source: Git tags v0.2.0 through v0.5.0, value: "Composer VCS versions; current main and v0.5.0 resolve to f168a8c05e829d36994a731bdf144689da73cf4e" }
     production_observation: { status: not-applicable }
@@ -52,28 +53,32 @@ exceptions:
     review_date: "2026-11-14"
     status: proposed
   - id: PAR-210
-    concern: Runtime and consumer declarations do not describe one enforced compatibility contract
-    reason: The source candidate now constrains PHP to the tested 8.0-through-8.5 range, declares OpenSSL and sodium, locks development resolution at the 8.0.0 floor, and runs the full matrix. README distinguishes Pro/Lite v0.5.0 adoption from Connect's intentional v0.2.0 signed-update slice. Representative consumer integration and duplicated form/hook adoption remain unproved.
-    risk: Composer can admit a host missing required crypto capabilities or an untested PHP version, and maintainers can assume later shared behavior reaches consumers that pin an earlier or locally duplicated implementation.
+    concern: Consumer integration does not prove one shared adoption contract
+    reason: Exact main constrains PHP to the tested 8.0-through-8.5 range, requires OpenSSL and sodium, locks development resolution at the 8.0.0 floor, and runs the full matrix. README distinguishes Pro/Lite v0.5.0 adoption from Connect's intentional v0.2.0 signed-update slice. Representative consumer integration and duplicated form/hook adoption remain unproved.
+    risk: Maintainers can assume later shared behavior reaches consumers that pin an earlier or locally duplicated implementation.
     owner: Peanut Graphic
-    verification: Merge and exact-main verify the runtime matrix, then add integration assertions that each bundled plugin uses the intended shared classes and exact lock revision.
+    verification: Add integration assertions that each bundled plugin uses the intended shared classes and exact lock revision.
     review_date: "2026-11-14"
     status: proposed
   - id: PAR-503
-    concern: The shared security library has no required repository quality gate
-    reason: The repository has no GitHub Actions workflow and main is unprotected. The 63-test suite and dependency audit pass only when run manually from an unlocked PHPUnit dependency graph, so direct changes and tags are not gated on syntax, compatibility, cryptographic regressions, or consumer integration.
-    risk: A regression in fail-closed update verification, host matching, masking, key derivation, or legacy ciphertext compatibility can be tagged and consumed without any required automated proof.
+    concern: Source quality gates are present but not required by repository policy or consumer integration
+    reason: Exact main has a deterministic development lock and a green PHP 8.0-through-8.5 workflow covering declarations, syntax, 63 security tests, and blocking locked audit. This source candidate also gates every future v* tag and self-tests that the critical update/encryption suites cannot be silently removed. Main remains unprotected, and representative Pro/Lite/Connect integration is not part of the repository gate.
+    risk: Repository administration can bypass the source checks, or a consumer-specific adoption regression can escape a library-only test and be bundled into a plugin release.
     owner: Peanut Graphic
-    verification: Commit a deterministic development lock or equivalent toolchain pin, require PHP compatibility, syntax, unit, crypto-property, dependency-audit, and representative consumer-integration checks on protected main and release tags, and fail closed when any consumer proof is absent.
-    review_date: "2026-08-21"
+    verification: Exact-main verify the tag-quality source gate, then separately require its contexts on protected main/version tags and add fail-closed representative consumer integration.
+    review_date: "2026-09-07"
     status: proposed
 verification:
   status: source-audited
-  audited_commit: 477f77889737dd0a06265408af900f935cbe678e
-  last_reviewed: "2026-08-15"
+  audited_commit: cad89c360862963801be30ae41bc5a34416eacea
+  last_reviewed: "2026-08-31"
   sources:
     - README.md
     - composer.json
+    - composer.lock
+    - .github/workflows/compatibility.yml
+    - scripts/verify-runtime-contract.php
+    - scripts/verify-quality-gate.php
     - src/Api
     - src/Crypto
     - src/Update
@@ -86,6 +91,6 @@ verification:
     - GitHub repository, branch-protection, tag, release, and workflow metadata
   outstanding:
     - Add authenticated immutable tag provenance, representative consumer canaries, bundled artifact identity, and rollback evidence under PAR-005.
-    - Merge and exact-main verify the runtime/extension/lock matrix, then prove exact consumer slice adoption under PAR-210.
-    - Add required deterministic library and consumer-integration quality gates under PAR-503.
+    - Prove exact consumer slice adoption under PAR-210.
+    - Exact-main verify the tag-quality gate, then require it through repository policy and add consumer-integration proof under PAR-503.
     - Preserve legacy ciphertext compatibility and fail-closed update verification throughout any remediation.

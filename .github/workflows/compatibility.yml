@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+    tags: ['v*']
 
 permissions:
   contents: read
@@ -34,6 +35,11 @@ jobs:
           composer validate --strict
           php scripts/verify-runtime-contract.php
           php tests/runtime-contract.php
+      - name: Validate quality-gate source contract
+        if: matrix.php == '8.0'
+        run: |
+          php scripts/verify-quality-gate.php
+          php tests/quality-gate-contract.php
       - name: Install locked development dependencies
         run: composer install --no-interaction --prefer-dist
       - name: Lint PHP source
