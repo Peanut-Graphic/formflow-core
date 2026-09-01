@@ -33,8 +33,8 @@ services:
       - { scope: dependency, source: src/Update, value: "Fail-closed SHA-256 plus Ed25519 package verification and trusted HTTPS host enforcement" }
       - { scope: dependency, source: src/Crypto, value: "Sensitive-value masking/hashing, encryption-key notices, and legacy-compatible AES-256-CBC data-at-rest encryption" }
       - { scope: dependency, source: src/Api and src/class-hooks.php, value: "Shared connector/result contracts, registry, and hook catalog; adoption is partial across consumers" }
-      - { scope: release, source: FORMFLOW and FORMFLOW-LITE composer.lock, value: "Both consumers resolve v0.5.0 at f168a8c05e829d36994a731bdf144689da73cf4e" }
-      - { scope: release, source: PEANUT-CONNECT composer.lock, value: "Consumer resolves update-verification slice v0.2.0 at 1da54b9e5573ecc4156fab3d0b0df856840853fa" }
+      - { scope: release, source: FORMFLOW and FORMFLOW-LITE composer.lock, value: "Exact consumer mains a1ab7374a6e8063120493beb7e1f967775d4231b and 5982bc8a7a78d382b6bdfd943fb78a0074dc425d resolve v0.5.0 at f168a8c05e829d36994a731bdf144689da73cf4e" }
+      - { scope: release, source: PEANUT-CONNECT composer.lock, value: "Exact consumer main 46de50c2b4e3d87678e020485d00cd071b92ff24 resolves the intentional update-verification slice v0.2.0 at 1da54b9e5573ecc4156fab3d0b0df856840853fa" }
     production_observation: { status: unverified }
 distribution:
   mode: package-registry
@@ -62,16 +62,16 @@ exceptions:
     status: proposed
   - id: PAR-503
     concern: Source quality gates are present but not required by repository policy or consumer integration
-    reason: Exact main has a deterministic development lock and a green PHP 8.0-through-8.5 workflow covering declarations, syntax, 63 security tests, and blocking locked audit. This source candidate also gates every future v* tag and self-tests that the critical update/encryption suites cannot be silently removed. Main remains unprotected, and representative Pro/Lite/Connect integration is not part of the repository gate.
+    reason: Exact main has a deterministic development lock and a green PHP 8.0-through-8.5 workflow covering declarations, syntax, 63 security tests, and blocking locked audit. The exact-main tag-quality gate covers every future v* tag and self-tests that the critical update/encryption suites cannot be silently removed. Read-only review on 2026-09-01 reconfirmed that main is unprotected, rulesets and Releases are absent, and representative Pro/Lite/Connect integration is not part of the repository gate.
     risk: Repository administration can bypass the source checks, or a consumer-specific adoption regression can escape a library-only test and be bundled into a plugin release.
     owner: Peanut Graphic
     verification: Exact-main verify the tag-quality source gate, then separately require its contexts on protected main/version tags and add fail-closed representative consumer integration.
-    review_date: "2026-09-07"
+    review_date: "2026-10-01"
     status: proposed
 verification:
   status: source-audited
-  audited_commit: cad89c360862963801be30ae41bc5a34416eacea
-  last_reviewed: "2026-08-31"
+  audited_commit: fb8f235c0e5c9b6f5de0163ede564ca012080137
+  last_reviewed: "2026-09-01"
   sources:
     - README.md
     - composer.json
@@ -92,5 +92,5 @@ verification:
   outstanding:
     - Add authenticated immutable tag provenance, representative consumer canaries, bundled artifact identity, and rollback evidence under PAR-005.
     - Prove exact consumer slice adoption under PAR-210.
-    - Exact-main verify the tag-quality gate, then require it through repository policy and add consumer-integration proof under PAR-503.
+    - Require the exact-main tag-quality contexts through repository policy and add consumer-integration proof under PAR-503.
     - Preserve legacy ciphertext compatibility and fail-closed update verification throughout any remediation.
