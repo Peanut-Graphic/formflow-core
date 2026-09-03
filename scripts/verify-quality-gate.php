@@ -14,8 +14,11 @@ function fail_quality_contract(string $message): void
 $workflowPath = $root.'/.github/workflows/compatibility.yml';
 $lockPath = $root.'/composer.lock';
 $phpunitPath = $root.'/phpunit.xml';
+$auditWrapperPath = $root.'/scripts/run-composer-audit-transport.sh';
+$auditTransportContractPath = $root.'/tests/composer-audit-transport-contract.sh';
+$auditWorkflowContractPath = $root.'/tests/composer-audit-workflow-contract.sh';
 
-foreach ([$workflowPath, $lockPath, $phpunitPath] as $requiredFile) {
+foreach ([$workflowPath, $lockPath, $phpunitPath, $auditWrapperPath, $auditTransportContractPath, $auditWorkflowContractPath] as $requiredFile) {
     if (!is_file($requiredFile)) {
         fail_quality_contract('required file is missing: '.$requiredFile);
     }
@@ -39,10 +42,12 @@ foreach ([
     'php tests/runtime-contract.php',
     'php scripts/verify-quality-gate.php',
     'php tests/quality-gate-contract.php',
+    'bash tests/composer-audit-transport-contract.sh',
+    'bash tests/composer-audit-workflow-contract.sh',
     'composer install --no-interaction --prefer-dist',
     "find src tests scripts -name '*.php' -print0 | xargs -0 -n1 php -l",
     'vendor/bin/phpunit',
-    'composer audit --locked',
+    'bash scripts/run-composer-audit-transport.sh',
 ] as $requiredWorkflowText) {
     if (!str_contains($workflow, $requiredWorkflowText)) {
         fail_quality_contract('compatibility workflow disagrees: '.$requiredWorkflowText);

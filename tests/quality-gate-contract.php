@@ -31,10 +31,14 @@ function copy_quality_fixture(string $root, string $target): void
 {
     remove_quality_fixture($target);
     mkdir($target.'/.github/workflows', 0777, true);
+    mkdir($target.'/scripts', 0777, true);
     mkdir($target.'/tests', 0777, true);
     copy($root.'/.github/workflows/compatibility.yml', $target.'/.github/workflows/compatibility.yml');
     copy($root.'/composer.lock', $target.'/composer.lock');
     copy($root.'/phpunit.xml', $target.'/phpunit.xml');
+    copy($root.'/scripts/run-composer-audit-transport.sh', $target.'/scripts/run-composer-audit-transport.sh');
+    copy($root.'/tests/composer-audit-transport-contract.sh', $target.'/tests/composer-audit-transport-contract.sh');
+    copy($root.'/tests/composer-audit-workflow-contract.sh', $target.'/tests/composer-audit-workflow-contract.sh');
 
     foreach (['PackageVerifierTest.php', 'SignedUpdateGateTest.php', 'EncryptorTest.php', 'SensitiveValueTest.php'] as $test) {
         copy($root.'/tests/'.$test, $target.'/tests/'.$test);
@@ -64,9 +68,15 @@ if (run_quality_verifier($verifier, $temp) === 0) {
 
 copy_quality_fixture($root, $temp);
 $workflow = (string) file_get_contents($temp.'/.github/workflows/compatibility.yml');
-file_put_contents($temp.'/.github/workflows/compatibility.yml', str_replace('composer audit --locked', 'composer audit', $workflow));
+file_put_contents($temp.'/.github/workflows/compatibility.yml', str_replace('bash scripts/run-composer-audit-transport.sh', 'composer audit --locked', $workflow));
 if (run_quality_verifier($verifier, $temp) === 0) {
-    fail_quality_test('unlocked dependency audit was accepted');
+    fail_quality_test('direct dependency-audit bypass was accepted');
+}
+
+copy_quality_fixture($root, $temp);
+unlink($temp.'/scripts/run-composer-audit-transport.sh');
+if (run_quality_verifier($verifier, $temp) === 0) {
+    fail_quality_test('missing dependency-audit transport wrapper was accepted');
 }
 
 copy_quality_fixture($root, $temp);
