@@ -40,6 +40,8 @@ jobs:
         run: |
           php scripts/verify-quality-gate.php
           php tests/quality-gate-contract.php
+          bash tests/composer-audit-transport-contract.sh
+          bash tests/composer-audit-workflow-contract.sh
       - name: Install locked development dependencies
         run: composer install --no-interaction --prefer-dist
       - name: Lint PHP source
@@ -47,4 +49,4 @@ jobs:
       - name: Run unit tests
         run: vendor/bin/phpunit
       - name: Audit locked dependencies
-        run: composer audit --locked
+        run: bash scripts/run-composer-audit-transport.sh
