@@ -58,6 +58,25 @@ Because "it round-trips itself" would not have caught that, the suite reproduces
 algorithm verbatim** and proves the two interchangeable in BOTH directions, across unicode,
 multiline, exact-AES-block and 5KB payloads — so a partial rollout can't corrupt reads either.
 
+#### Authenticated format (V2) — 0.6.0
+
+The legacy format has no integrity check (a stored value can be altered undetectably) and its key
+is a truncation (the wp_salt fallback is only 128 bits). V2 is **XChaCha20-Poly1305** with a random
+192-bit nonce, framed `ffc2:` + base64(nonce ‖ ciphertext); tampering or a wrong key decrypts to
+`''`. Its key is **HKDF-SHA256 over the full key material**, not the truncated legacy key — build
+the encryptor with `Encryptor::fromKeyMaterial($constant, wp_salt('auth'))` (or
+`fromKeyConstant()`) to get it; the plain constructor still works but derives V2 from the
+truncated key.
+
+Rollout is **two-phase**, because a site that rolls a plugin back must still read what the newer
+version wrote:
+
+1. **0.6.x (now):** reads both formats; still **writes legacy** by default. Pass
+   `authenticatedWrites: true` to write V2 early. Ship this to both plugins first.
+2. **Next minor:** flip the default to V2 writes once every version a site could roll back to can
+   read V2. Plugins then migrate lazily: when `needsReencrypt($stored)` is true, decrypt, encrypt,
+   save.
+
 > ⚠️ **Release requirement:** a consumer that registers `SignedUpdateGate` will refuse **every**
 > subsequent update that lacks a valid `.manifest.json`. Its releases must therefore be published via
 > `Peanut-meta/scripts/publish-plugin.sh`, which signs unconditionally. As of 2026-07-19 no

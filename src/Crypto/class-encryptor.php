@@ -1,16 +1,28 @@
 <?php
 /**
- * AES-256-CBC encryption for data at rest, extracted from the byte-identical
- * copies in FormFlow Pro and FormFlow Lite.
+ * Encryption for data at rest, shared by FormFlow Pro and FormFlow Lite.
+ *
+ * Two formats:
+ *
+ *  - LEGACY (read + default write): AES-256-CBC, 16-byte IV prepended, base64.
+ *    Extracted byte-for-byte from the plugins. It has no integrity check, so a
+ *    stored value can be altered undetectably, and its key is a truncation
+ *    (a configured constant cut to 32 bytes; the wp_salt fallback cut to 32
+ *    hex characters, i.e. 128 bits).
+ *
+ *  - V2 (read; written when authenticated writes are on): XChaCha20-Poly1305
+ *    AEAD with a random 192-bit nonce, framed as "ffc2:" . base64(nonce . ct).
+ *    Tampering or a wrong key fails decryption. Its key is HKDF-SHA256 over the
+ *    FULL key material, not a truncation. The prefix cannot collide with legacy
+ *    output, whose base64 alphabet has no ':'.
  *
  * THE CONSTRAINT THAT SHAPES THIS FILE: existing ciphertext must keep
- * decrypting. Stored records were written by the previous implementation, so
- * the key derivation and the wire format are reproduced EXACTLY — same cipher,
- * same 16-byte IV prepended to the ciphertext, same base64 envelope, same
- * substr(...,0,32) key truncation. A "cleaner" derivation here would silently
- * make every stored record unreadable, which is why the test-suite proves
- * round-tripping against a verbatim copy of the legacy algorithm rather than
- * only against itself.
+ * decrypting, and a site that rolls a plugin back must still read what the
+ * newer version wrote. So the legacy key derivation and format are reproduced
+ * exactly, and the rollout is two-phase: this version reads both formats and
+ * still WRITES legacy unless authenticated writes are enabled; a later version
+ * flips the default once every consumer that might be rolled back to can read
+ * V2. Callers migrate stored values lazily with needsReencrypt().
  *
  * Key derivation is a pure function of (constant value, fallback salt) so it is
  * testable without WordPress.
@@ -31,18 +43,52 @@ final class Encryptor
     private const IV_LENGTH  = 16;
     private const MIN_KEY_LENGTH = 32;
 
+    private const V2_PREFIX = 'ffc2:';
+    private const V2_INFO   = 'formflow-core/v2/data-at-rest';
+    private const V2_AD     = 'formflow-core/v2';
+
     private string $key;
 
+    private string $v2Key;
+
+    private bool $authenticatedWrites;
+
     /**
-     * @param string $key Derived 32-byte key (see deriveKey()).
+     * @param string      $key                 Legacy 32-byte key (see deriveKey()).
+     * @param string|null $v2Key               32-byte V2 key; when null it is derived from $key.
+     *                                         Prefer fromKeyMaterial(), which derives it from the
+     *                                         full-entropy inputs instead of the truncated key.
+     * @param bool        $authenticatedWrites Write V2 (true) or legacy (false, the default for
+     *                                         phase 1 of the rollout — see the file docblock).
      */
-    public function __construct(string $key)
+    public function __construct(string $key, ?string $v2Key = null, bool $authenticatedWrites = false)
     {
-        $this->key = $key;
+        $this->key                 = $key;
+        $this->v2Key               = $v2Key ?? self::hkdf($key);
+        $this->authenticatedWrites = $authenticatedWrites;
     }
 
     /**
-     * Derive the encryption key exactly as the plugins always have.
+     * Build from the raw key inputs: the legacy key exactly as before, and the
+     * V2 key from the untruncated material.
+     *
+     * @param string|null $constantValue Value of the plugin's *_ENCRYPTION_KEY, or null.
+     * @param string      $fallbackSalt  wp_salt('auth') equivalent.
+     */
+    public static function fromKeyMaterial(
+        ?string $constantValue,
+        string $fallbackSalt,
+        bool $authenticatedWrites = false
+    ): self {
+        $material = $constantValue !== null && strlen($constantValue) >= self::MIN_KEY_LENGTH
+            ? 'constant:' . $constantValue
+            : 'wp_salt:' . $fallbackSalt;
+
+        return new self(self::deriveKey($constantValue, $fallbackSalt), self::hkdf($material), $authenticatedWrites);
+    }
+
+    /**
+     * Derive the LEGACY encryption key exactly as the plugins always have.
      *
      * A configured key is TRUNCATED to 32 bytes (not hashed); only the
      * wp_salt fallback is hashed. Preserved verbatim — changing which branch
@@ -66,12 +112,12 @@ final class Encryptor
      *
      * @param string $keyConstant e.g. 'ISF_ENCRYPTION_KEY'.
      */
-    public static function fromKeyConstant(string $keyConstant): self
+    public static function fromKeyConstant(string $keyConstant, bool $authenticatedWrites = false): self
     {
         $configured = defined($keyConstant) ? (string) constant($keyConstant) : null;
         $fallback   = function_exists('wp_salt') ? (string) wp_salt('auth') : '';
 
-        return new self(self::deriveKey($configured, $fallback));
+        return self::fromKeyMaterial($configured, $fallback, $authenticatedWrites);
     }
 
     /**
@@ -85,20 +131,13 @@ final class Encryptor
             return '';
         }
 
-        $iv = openssl_random_pseudo_bytes(self::IV_LENGTH);
-
-        $encrypted = openssl_encrypt($data, self::METHOD, $this->key, OPENSSL_RAW_DATA, $iv);
-
-        if ($encrypted === false) {
-            throw new \RuntimeException('Encryption failed');
-        }
-
-        return base64_encode($iv . $encrypted);
+        return $this->authenticatedWrites ? $this->encryptV2($data) : $this->encryptLegacy($data);
     }
 
     /**
-     * Decrypt a string. Returns '' on any failure — callers treat empty as
-     * "unavailable" rather than surfacing a partial/garbled value.
+     * Decrypt either format. Returns '' on any failure — including a V2 value
+     * that was tampered with or written under a different key — so callers
+     * treat empty as "unavailable" rather than surfacing a garbled value.
      */
     public function decrypt(string $data): string
     {
@@ -106,21 +145,21 @@ final class Encryptor
             return '';
         }
 
-        $decoded = base64_decode($data, true);
-        if ($decoded === false) {
-            return '';
+        if (self::isV2($data)) {
+            return $this->decryptV2($data);
         }
 
-        $iv        = substr($decoded, 0, self::IV_LENGTH);
-        $encrypted = substr($decoded, self::IV_LENGTH);
+        return $this->decryptLegacy($data);
+    }
 
-        if (strlen($iv) !== self::IV_LENGTH) {
-            return '';
-        }
-
-        $decrypted = openssl_decrypt($encrypted, self::METHOD, $this->key, OPENSSL_RAW_DATA, $iv);
-
-        return $decrypted !== false ? $decrypted : '';
+    /**
+     * True when a stored value should be rewritten: it is a legacy value and
+     * this encryptor writes V2. Callers use it to migrate records lazily
+     * (decrypt, then encrypt and save) as they are read.
+     */
+    public function needsReencrypt(string $stored): bool
+    {
+        return $this->authenticatedWrites && $stored !== '' && !self::isV2($stored);
     }
 
     /**
@@ -144,5 +183,78 @@ final class Encryptor
         $decoded = json_decode($json, true);
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    private static function isV2(string $data): bool
+    {
+        return strncmp($data, self::V2_PREFIX, strlen(self::V2_PREFIX)) === 0;
+    }
+
+    private static function hkdf(string $material): string
+    {
+        return hash_hkdf('sha256', $material, SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_KEYBYTES, self::V2_INFO);
+    }
+
+    private function encryptV2(string $data): string
+    {
+        $nonce = random_bytes(SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES);
+        $ciphertext = sodium_crypto_aead_xchacha20poly1305_ietf_encrypt($data, self::V2_AD, $nonce, $this->v2Key);
+
+        return self::V2_PREFIX . base64_encode($nonce . $ciphertext);
+    }
+
+    private function decryptV2(string $data): string
+    {
+        $decoded = base64_decode(substr($data, strlen(self::V2_PREFIX)), true);
+        $nonceLength = SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_NPUBBYTES;
+
+        if ($decoded === false || strlen($decoded) < $nonceLength + SODIUM_CRYPTO_AEAD_XCHACHA20POLY1305_IETF_ABYTES) {
+            return '';
+        }
+
+        try {
+            $plaintext = sodium_crypto_aead_xchacha20poly1305_ietf_decrypt(
+                substr($decoded, $nonceLength),
+                self::V2_AD,
+                substr($decoded, 0, $nonceLength),
+                $this->v2Key
+            );
+        } catch (\SodiumException $e) {
+            return '';
+        }
+
+        return $plaintext !== false ? $plaintext : '';
+    }
+
+    private function encryptLegacy(string $data): string
+    {
+        $iv = openssl_random_pseudo_bytes(self::IV_LENGTH);
+
+        $encrypted = openssl_encrypt($data, self::METHOD, $this->key, OPENSSL_RAW_DATA, $iv);
+
+        if ($encrypted === false) {
+            throw new \RuntimeException('Encryption failed');
+        }
+
+        return base64_encode($iv . $encrypted);
+    }
+
+    private function decryptLegacy(string $data): string
+    {
+        $decoded = base64_decode($data, true);
+        if ($decoded === false) {
+            return '';
+        }
+
+        $iv        = substr($decoded, 0, self::IV_LENGTH);
+        $encrypted = substr($decoded, self::IV_LENGTH);
+
+        if (strlen($iv) !== self::IV_LENGTH) {
+            return '';
+        }
+
+        $decrypted = openssl_decrypt($encrypted, self::METHOD, $this->key, OPENSSL_RAW_DATA, $iv);
+
+        return $decrypted !== false ? $decrypted : '';
     }
 }
