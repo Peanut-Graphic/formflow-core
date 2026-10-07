@@ -16,7 +16,7 @@ Extracted so far — the API-contract cluster + two pure utilities, characteriza
 The security primitive behind Peanut's signed plugin updates, extracted from FormFlow Pro's
 `class-updater.php` so all three consumers verify identically instead of drifting:
 
-- **`PackageVerifier`** — pure + WordPress-free. `verifyBytes()` checks sha256 **and** the detached
+- **`PackageVerifier`** — pure verification methods with no WordPress API calls (loading still requires the WordPress bootstrap described below). `verifyBytes()` checks sha256 **and** the detached
   Ed25519 signature (sha256 alone proves nothing — whoever can swap the zip can swap the hash beside
   it). `isTrustedPackageUrl()` matches hosts on a **label boundary**, so `github.com` matches
   `codeload.github.com` but `peanutgraphic.com` never matches `evilpeanutgraphic.com`.
@@ -88,6 +88,14 @@ version wrote:
 plugin's `vendor/` at build time (`scripts/publish-plugin.sh`). FormFlow Pro and Lite currently pin
 the complete v0.5.0 surface. Peanut Connect intentionally remains on the v0.2.0 signed-update slice;
 later form and crypto slices are not assumed adopted until its lock advances under a separate consumer change.
+
+### Bootstrap requirement
+
+This package is currently a WordPress plugin library. Load its Composer autoloader from an already bootstrapped WordPress plugin; `ABSPATH` must be defined before an extracted class is loaded. The source files retain their WordPress direct-access guards.
+
+“Pure” describes the algorithms in `PackageVerifier` and `SensitiveValue`, not a standalone PHP entry point. Calling either from an ordinary CLI script without WordPress bootstrap exits at the guard before the method runs; the process may return exit code zero, which is not proof that the operation completed. Standalone CLI use is not currently supported.
+
+The test bootstrap defines `ABSPATH` and stubs WordPress functions. Passing those tests verifies the extracted behavior under that explicit harness; it does not prove standalone loading or real WordPress activation.
 
 ## Test
 `composer install && vendor/bin/phpunit` — the tests pin behaviour both plugins relied on (WP is stubbed).
