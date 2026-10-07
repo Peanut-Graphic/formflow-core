@@ -2,10 +2,11 @@
 /**
  * Package Verifier — the cryptographic core of Peanut's signed plugin updates.
  *
- * Pure and WordPress-free by design: every method is static, side-effect free,
+ * Pure verification methods: every method is static, side-effect free,
  * and depends only on PHP + libsodium, so the sha256 + Ed25519 logic can be
  * proven in isolation with a throwaway keypair (the production signing key is
- * not in any repo).
+ * not in any repo). Loading the file still requires ABSPATH; the test harness
+ * supplies that bootstrap explicitly.
  *
  * FAIL-CLOSED is the contract. Every branch — missing manifest field, decode
  * failure, wrong key/signature length, unavailable libsodium, untrusted host —

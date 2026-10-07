@@ -10,8 +10,8 @@
  * A6 describes: one bug, found twice, fixed twice, in two places, with no
  * guarantee the next fix reaches both.
  *
- * Everything here is static and side-effect free (no WordPress), so the
- * behaviour is provable in isolation.
+ * The methods are static and side-effect free, with no WordPress API calls.
+ * Loading this file still requires ABSPATH; tests supply an explicit bootstrap.
  *
  * @package Peanut\FormCore
  * @since 0.3.0
