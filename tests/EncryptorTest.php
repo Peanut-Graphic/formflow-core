@@ -130,11 +130,25 @@ final class EncryptorTest extends TestCase
         $this->assertSame('', $e->decrypt(base64_encode(str_repeat('x', 40))), 'undecryptable payload');
     }
 
-    public function test_wrong_key_does_not_decrypt(): void
+    public function test_authenticated_format_rejects_a_wrong_key(): void
     {
-        $written = (new Encryptor(Encryptor::deriveKey(self::KEY_CONST, 's')))->encrypt('secret');
+        $written = (new Encryptor(Encryptor::deriveKey(self::KEY_CONST, 's'), null, true))->encrypt('secret');
         $other   = new Encryptor(Encryptor::deriveKey('a-completely-different-key-32-chars-long!', 's'));
         $this->assertSame('', $other->decrypt($written));
+    }
+
+    public function test_legacy_format_cannot_authenticate_a_wrong_key_with_valid_padding(): void
+    {
+        // Fixed synthetic CBC fixture: a wrong key can yield valid padding.
+        // Random-IV rejection tests incorrectly promise authentication and flake.
+        // Preserve legacy byte compatibility; only V2 guarantees key rejection.
+        $stored = '25sc+ILccUFj54pyZjRcxqJdYiH8jugQkG5EOrlwFSI=';
+        $correct = new Encryptor(Encryptor::deriveKey(self::KEY_CONST, 's'));
+        $otherKey = Encryptor::deriveKey('a-completely-different-key-32-chars-long!', 's');
+        $other = new Encryptor($otherKey);
+        $this->assertSame('secret', $correct->decrypt($stored));
+        $this->assertSame('f1c5f4b8a9691c48264d3f24c54500', bin2hex($other->decrypt($stored)));
+        $this->assertSame(self::legacyDecrypt($stored, $otherKey), $other->decrypt($stored));
     }
 
     public function test_array_round_trip_and_failure_modes(): void
