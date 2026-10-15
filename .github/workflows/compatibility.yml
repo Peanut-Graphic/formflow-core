@@ -1,6 +1,8 @@
 name: PHP Compatibility
 
 on:
+  # Requalify the selected ref without a source change, tag or publication.
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
